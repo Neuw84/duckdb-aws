@@ -44,27 +44,32 @@ struct ArnTarget {
 
 using arn_handler_t = ArnTarget (*)(const ParsedArn &);
 
+static string BuildResourceComponent(const vector<string> &fields) {
+	if (fields.size() <= 5) {
+		return "";
+	}
+	vector<string> parts;
+	for (idx_t i = 5; i < fields.size(); i++) {
+		parts.push_back(fields[i]);
+	}
+	return StringUtil::Join(parts, ":");
+}
+
 static ParsedArn ParseArn(const string &arn) {
-	string fields[5];
-	idx_t field = 0;
-	idx_t start = 0;
-	for (idx_t i = 0; i < arn.size() && field < 5; i++) {
-		if (arn[i] == ':') {
-			fields[field++] = arn.substr(start, i - start);
-			start = i + 1;
-		}
+	auto fields = StringUtil::Split(arn, ":");
+	if (fields.size() < 5 || fields[0] != "arn") {
+		throw InvalidInputException("Expected an AWS ARN of the form 'arn:<partition>:<service>:<region>:<account>:<resource>', got '%s'", arn);
 	}
-	if (field < 5 || !StringUtil::CIEquals(fields[0], "arn")) {
-		throw InvalidInputException(
-		    "Expected an AWS ARN of the form 'arn:<partition>:<service>:<region>:<account>:<resource>', got '%s'", arn);
-	}
+
 	ParsedArn result;
 	result.raw = arn;
 	result.partition = fields[1];
+	// All valid service identifiers are lowercase,
+	// let's be helpful and lowercase instead of throwing an error for non-lowercase service components.
 	result.service = StringUtil::Lower(fields[2]);
 	result.region = fields[3];
 	result.account_id = fields[4];
-	result.resource = arn.substr(start);
+	result.resource = BuildResourceComponent(fields);
 	return result;
 }
 
