@@ -117,7 +117,8 @@ public:
 	                                                 const string &profile = "", const string &assume_role_arn = "",
 	                                                 const string &external_id = "",
 	                                                 const string &web_identity_token_file = "",
-	                                                 const string &session_name = "") {
+	                                                 const string &session_name = "",
+	                                                 optional_ptr<ClientContext> context = nullptr) {
 		auto chain_list = StringUtil::Split(credential_chain, ';');
 
 		for (const auto &item : chain_list) {
@@ -141,11 +142,17 @@ public:
 				if (!SELECTED_CURL_CERT_PATH.empty()) {
 					sso_config->caFile = SELECTED_CURL_CERT_PATH;
 				}
-				if (profile.empty()) {
-					AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(Aws::String(), sso_config));
-				} else {
-					AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(profile.c_str(), sso_config));
+				// Only the SDK's no-arg SSOCredentialsProvider constructor resolves
+				// AWS_PROFILE/AWS_DEFAULT_PROFILE (via GetConfigProfileName); the (profile, config)
+				// overload stores its argument verbatim. Since we need the overload for the CA
+				// config, resolve the profile name ourselves when the secret does not pin one (#177).
+				Aws::String sso_profile =
+				    profile.empty() ? Aws::Auth::GetConfigProfileName() : Aws::String(profile.c_str());
+				if (context) {
+					DUCKDB_LOG_DEBUG(*context, "aws.SSOCredentialsProvider: using profile '%s'",
+					                 string(sso_profile.c_str()));
 				}
+				AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(sso_profile, sso_config));
 			} else if (item == "env") {
 				AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
 			} else if (item == "instance") {
@@ -356,9 +363,9 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 		if (chain.empty()) {
 			throw InvalidConfigurationException("Invalid RDS secret parameters, 'CHAIN' option must be specified");
 		}
-		auto provider = Aws::MakeShared<DuckDBCustomAWSCredentialsProviderChain>("rds", chain, require_credentials,
-		                                                                         profile, assume_role, external_id,
-		                                                                         web_identity_token_file, session_name);
+		auto provider = Aws::MakeShared<DuckDBCustomAWSCredentialsProviderChain>(
+		    "rds", chain, require_credentials, profile, assume_role, external_id, web_identity_token_file, session_name,
+		    &context);
 		return CreateRDSSecretWithProvider(provider, input, region);
 	}
 
@@ -371,7 +378,7 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 
 	if (!chain.empty()) {
 		DuckDBCustomAWSCredentialsProviderChain provider(chain, require_credentials, profile, assume_role, external_id,
-		                                                 web_identity_token_file, session_name);
+		                                                 web_identity_token_file, session_name, &context);
 		credentials = provider.GetAWSCredentials();
 	} else {
 		if (input.options.find("profile") != input.options.end()) {
