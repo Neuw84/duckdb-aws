@@ -369,6 +369,26 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 		}
 	}
 
+	// Log the container-credentials configuration when the chain includes 'container': the
+	// AWS_CONTAINER_* values decide whether the provider is usable, and failures otherwise leave
+	// no trace of what the environment contained. The auth token value itself is never logged.
+	for (const auto &item : StringUtil::Split(chain, ';')) {
+		if (item == "container") {
+			using Aws::Auth::GeneralHTTPCredentialsProvider;
+			DUCKDB_LOG_DEBUG(
+			    context,
+			    "aws.CredentialChain: container credentials config: relative_uri='%s', full_uri='%s', "
+			    "auth_token_file='%s', auth_token %s",
+			    FileSystem::GetEnvVariable(GeneralHTTPCredentialsProvider::AWS_CONTAINER_CREDENTIALS_RELATIVE_URI),
+			    FileSystem::GetEnvVariable(GeneralHTTPCredentialsProvider::AWS_CONTAINER_CREDENTIALS_FULL_URI),
+			    FileSystem::GetEnvVariable(GeneralHTTPCredentialsProvider::AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE),
+			    FileSystem::GetEnvVariable(GeneralHTTPCredentialsProvider::AWS_CONTAINER_AUTHORIZATION_TOKEN).empty()
+			        ? "unset"
+			        : "set");
+			break;
+		}
+	}
+
 	// Region MUST be set according to the SDK https://docs.aws.amazon.com/sdkref/latest/guide/feature-region.html
 	string region = ResolveAwsRegion(context, TryGetStringParam(input, "region"), profile);
 
