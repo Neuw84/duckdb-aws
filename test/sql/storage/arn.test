@@ -1,3 +1,5 @@
+# name: test/sql/storage/arn.test
+# group: [storage]
 
 require httpfs
 

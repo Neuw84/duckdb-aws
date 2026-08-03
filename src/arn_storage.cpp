@@ -100,7 +100,8 @@ static ArnTarget ResolveArnTarget(const ParsedArn &arn) {
 			services.push_back(it.first);
 		}
 		auto supported_options = StringUtil::Join(services, ", ");
-		throw NotImplementedException("ATTACH of AWS ARN service '%s' is not supported. Supported options are: %s", arn.service, supported_options);
+		throw NotImplementedException("ATTACH of AWS ARN service '%s' is not supported. Supported options are: %s",
+		                              arn.service, supported_options);
 	}
 	return entry->second(arn);
 }

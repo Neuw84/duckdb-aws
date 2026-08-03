@@ -1,3 +1,5 @@
+# name: test/sql/s3tables/s3tables.test
+# group: [s3tables]
 
 require httpfs
 
