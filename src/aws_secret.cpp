@@ -117,8 +117,7 @@ public:
 	                                                 const string &profile = "", const string &assume_role_arn = "",
 	                                                 const string &external_id = "",
 	                                                 const string &web_identity_token_file = "",
-	                                                 const string &session_name = "",
-	                                                 optional_ptr<ClientContext> context = nullptr) {
+	                                                 const string &session_name = "") {
 		auto chain_list = StringUtil::Split(credential_chain, ';');
 
 		for (const auto &item : chain_list) {
@@ -142,17 +141,11 @@ public:
 				if (!SELECTED_CURL_CERT_PATH.empty()) {
 					sso_config->caFile = SELECTED_CURL_CERT_PATH;
 				}
-				// Only the SDK's no-arg SSOCredentialsProvider constructor resolves
-				// AWS_PROFILE/AWS_DEFAULT_PROFILE (via GetConfigProfileName); the (profile, config)
-				// overload stores its argument verbatim. Since we need the overload for the CA
-				// config, resolve the profile name ourselves when the secret does not pin one (#177).
-				Aws::String sso_profile =
-				    profile.empty() ? Aws::Auth::GetConfigProfileName() : Aws::String(profile.c_str());
-				if (context) {
-					DUCKDB_LOG_DEBUG(*context, "aws.SSOCredentialsProvider: using profile '%s'",
-					                 string(sso_profile.c_str()));
+				if (profile.empty()) {
+					AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(Aws::String(), sso_config));
+				} else {
+					AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(profile.c_str(), sso_config));
 				}
-				AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(sso_profile, sso_config));
 			} else if (item == "env") {
 				AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
 			} else if (item == "instance") {
@@ -335,6 +328,13 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 	Aws::Auth::AWSCredentials credentials;
 
 	string profile = TryGetStringParam(input, "profile");
+	if (profile.empty()) {
+		// The SDK providers taking an explicit profile name store it verbatim, so an empty
+		// string would select the literal profile "". Resolve the name here the way the SDK's
+		// no-arg constructors do: AWS_PROFILE, then AWS_DEFAULT_PROFILE, then "default" (#177).
+		profile = Aws::Auth::GetConfigProfileName().c_str();
+	}
+	DUCKDB_LOG_DEBUG(context, "aws.CredentialChain: using profile '%s'", profile);
 	string assume_role = TryGetStringParam(input, "assume_role_arn");
 	string external_id = TryGetStringParam(input, "external_id");
 	string chain = TryGetStringParam(input, "chain");
@@ -363,9 +363,9 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 		if (chain.empty()) {
 			throw InvalidConfigurationException("Invalid RDS secret parameters, 'CHAIN' option must be specified");
 		}
-		auto provider = Aws::MakeShared<DuckDBCustomAWSCredentialsProviderChain>(
-		    "rds", chain, require_credentials, profile, assume_role, external_id, web_identity_token_file, session_name,
-		    &context);
+		auto provider = Aws::MakeShared<DuckDBCustomAWSCredentialsProviderChain>("rds", chain, require_credentials,
+		                                                                         profile, assume_role, external_id,
+		                                                                         web_identity_token_file, session_name);
 		return CreateRDSSecretWithProvider(provider, input, region);
 	}
 
@@ -378,7 +378,7 @@ static unique_ptr<BaseSecret> CreateAWSSecretFromCredentialChain(ClientContext &
 
 	if (!chain.empty()) {
 		DuckDBCustomAWSCredentialsProviderChain provider(chain, require_credentials, profile, assume_role, external_id,
-		                                                 web_identity_token_file, session_name, &context);
+		                                                 web_identity_token_file, session_name);
 		credentials = provider.GetAWSCredentials();
 	} else {
 		if (input.options.find("profile") != input.options.end()) {
