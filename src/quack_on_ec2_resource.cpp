@@ -45,7 +45,7 @@ static unique_ptr<GlobalTableFunctionState> QuackAdapterInit(ClientContext &, Ta
 // NOT assembled inline in the table-function argument (where `e.key`-style identifiers get silently coerced
 // to strings by the identifier-conversion rule, which would defeat the filter and leak `region`).
 static unique_ptr<FunctionData> QuackCreateBind(ClientContext &, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<QuackAdapterBindData>();
 	result->input = input.inputs[0];
 	names.emplace_back("handle");
@@ -114,7 +114,7 @@ static void QuackCreateFun(ClientContext &context, TableFunctionInput &data_p, D
 // terminal 'ready'/'failed' states the poll loop expects, and projects the stack Outputs into the connect
 // endpoint (uri + attached_db_type + token). cloudformation_describe_stack is unchanged by 0002.
 static unique_ptr<FunctionData> QuackStatusBind(ClientContext &, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<QuackAdapterBindData>();
 	result->input = input.inputs[0];
 	names.emplace_back("state");
@@ -149,7 +149,7 @@ static void QuackStatusFun(ClientContext &context, TableFunctionInput &data_p, D
 
 // destroy(handle MAP) -> TABLE(status VARCHAR)
 static unique_ptr<FunctionData> QuackDestroyBind(ClientContext &, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<QuackAdapterBindData>();
 	result->input = input.inputs[0];
 	names.emplace_back("status");
@@ -188,7 +188,7 @@ static unique_ptr<GlobalTableFunctionState> QuackListInit(ClientContext &, Table
 }
 
 static unique_ptr<FunctionData> QuackListBind(ClientContext &, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<QuackAdapterBindData>();
 	result->input = input.inputs[0];
 	names.emplace_back("handle");
