@@ -124,6 +124,7 @@ static ArnTarget ResolveArnTarget(const ParsedArn &arn) {
 		for (auto &it : handlers) {
 			services.push_back(it.first);
 		}
+		std::sort(services.begin(), services.end());
 		auto supported_options = StringUtil::Join(services, ", ");
 		throw NotImplementedException("ATTACH of AWS ARN service '%s' is not supported. Supported options are: %s",
 		                              arn.service, supported_options);
