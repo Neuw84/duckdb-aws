@@ -6,12 +6,15 @@ require aws
 
 require parquet
 
+
 # The 'aws' secret type is registered by httpfs.
 require httpfs
 
 require postgres_scanner
 
 require-env RDS_AVAILABLE 1
+
+set ignore_error_messages
 
 statement ok
 SET allow_persistent_secrets=false
@@ -20,13 +23,14 @@ statement ok
 CREATE SECRET rds_creds (
     TYPE aws,
     PROVIDER credential_chain,
-    PROFILE 'personal',
-    CHAIN 'config',
     REGION 'eu-central-1',
 );
 
 statement ok
-ATTACH 'attach-connect-test' AS rds_db (TYPE RDS);
+ATTACH 'duckdb-connect-test' AS rds_db (
+	TYPE RDS,
+	USER 'user_2'
+);
 
 statement ok
 select * from (show all tables) where database = 'rds_db';
@@ -38,18 +42,18 @@ SELECT count(*) FROM (SHOW ALL TABLES) WHERE database = 'rds_db';
 1
 
 query IIIIIIII
-select * from rds_db.public.dummy_users limit 10;
+select * from rds_db.public.dummy_users order by all limit 10;
 ----
-1	user_1	user_1@example.com	BR	21	615.13	false	2026-03-13 06:53:58.607726+00
-2	user_2	user_2@example.com	BR	20	1891.62	false	2026-03-17 19:12:22.919463+00
-3	user_3	user_3@example.com	BR	41	5543.64	true	2026-05-31 20:39:14.85907+00
-4	user_4	user_4@example.com	US	20	9981.93	true	2025-09-13 06:59:40.159487+00
-5	user_5	user_5@example.com	BR	23	1413.76	true	2026-03-23 19:24:28.210691+00
-6	user_6	user_6@example.com	NL	60	6127.10	true	2025-12-13 21:29:06.845312+00
-7	user_7	user_7@example.com	BR	18	6721.71	true	2025-07-23 08:29:01.694829+00
-8	user_8	user_8@example.com	DE	55	7432.12	true	2025-07-15 11:48:55.564206+00
-9	user_9	user_9@example.com	FR	26	1473.78	true	2026-04-26 21:59:39.039863+00
-10	user_10	user_10@example.com	BR	38	395.07	false	2026-02-28 21:43:16.32081+00
+1	user_1	user_1@example.com	NL	62	9813.63	1	2025-10-29 22:52:25.794058+00
+2	user_2	user_2@example.com	FR	42	3011.45	1	2026-06-14 08:23:16.147386+00
+3	user_3	user_3@example.com	JP	66	6378.12	1	2025-09-29 09:14:56.355268+00
+4	user_4	user_4@example.com	NL	32	198.89	1	2026-07-25 17:51:52.651764+00
+5	user_5	user_5@example.com	NL	47	5100.46	0	2026-05-18 20:52:11.513436+00
+6	user_6	user_6@example.com	US	41	8634.08	1	2025-11-01 06:13:04.11392+00
+7	user_7	user_7@example.com	NL	22	7475.59	1	2025-12-14 05:10:28.880589+00
+8	user_8	user_8@example.com	NL	34	3101.27	1	2025-08-13 09:40:11.572325+00
+9	user_9	user_9@example.com	BR	21	4192.30	0	2026-03-17 17:24:17.514905+00
+10	user_10	user_10@example.com	DE	46	1158.46	0	2025-12-20 23:27:54.956749+00
 
 statement ok
 DETACH rds_db

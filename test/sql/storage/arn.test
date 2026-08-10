@@ -31,7 +31,18 @@ Invalid Input Error: Invalid PARTITION Section of ARN: ''
 statement error
 ATTACH 'arn:aws::::' as db;
 ----
-Not implemented Error: ATTACH of AWS ARN service '' is not supported. Supported options are: s3tables
+Not implemented Error: ATTACH of AWS ARN service '' is not supported. Supported options are: rds, s3tables
+
+# RDS dispatch only accepts DB instance ARNs, and the ARN owns its region.
+statement error
+ATTACH 'arn:aws:rds:eu-central-1:840140254803:cluster:not-an-instance' AS db;
+----
+Invalid Input Error: Expected an RDS DB instance ARN with a resource of the form 'db:<instance-id>', got 'arn:aws:rds:eu-central-1:840140254803:cluster:not-an-instance'
+
+statement error
+ATTACH 'arn:aws:rds:eu-central-1:840140254803:db:instance' AS db (REGION 'us-east-1');
+----
+Invalid Input Error: ATTACH option 'region' is derived from the ARN and cannot be set explicitly
 
 # Correctly delegates to iceberg, fails to load because we haven't 'require'd it in this test
 statement error
