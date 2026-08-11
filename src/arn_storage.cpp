@@ -108,10 +108,39 @@ static ArnTarget RDSTarget(const ParsedArn &arn) {
 	return target;
 }
 
+static string RedshiftNamespaceResource(const ParsedArn &arn) {
+	static const string prefix = "namespace:";
+	if (!StringUtil::StartsWith(arn.resource, prefix) || arn.resource.size() == prefix.size()) {
+		throw InvalidInputException(
+		    "Expected a Redshift namespace ARN with a resource of the form 'namespace:<namespace-id>', got '%s'",
+		    arn.raw);
+	}
+	return arn.resource;
+}
+
+static ArnTarget RedshiftTarget(const ParsedArn &arn) {
+	if (arn.region.empty()) {
+		throw InvalidInputException("Redshift namespace ARN '%s' does not specify a region", arn.raw);
+	}
+	if (arn.account_id.empty()) {
+		throw InvalidInputException("Redshift namespace ARN '%s' does not specify an account ID", arn.raw);
+	}
+
+	ArnTarget target;
+	target.backend = "redshift";
+	target.path = RedshiftNamespaceResource(arn);
+	target.options["region"] = Value(arn.region);
+	target.options["account_id"] = Value(arn.account_id);
+	target.options["resource"] = Value(arn.resource);
+	target.autoload = false;
+	return target;
+}
+
 static const case_insensitive_map_t<arn_handler_t> &ArnServiceHandlers() {
 	static const case_insensitive_map_t<arn_handler_t> handlers {
 	    {"s3tables", S3TablesTarget},
 	    {"rds", RDSTarget},
+	    {"redshift", RedshiftTarget},
 	};
 	return handlers;
 }
