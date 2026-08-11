@@ -36,7 +36,7 @@ struct ArnTarget {
 	//! Storage extension the ATTACH is dispatched to
 	string backend;
 	string path;
-	//! Injected into AttachInfo::options
+	//! Injected into AttachInfo::options and the already-bound AttachOptions
 	case_insensitive_map_t<Value> options;
 	//! False when the backend ships in this same aws extension
 	bool autoload = true;
@@ -84,9 +84,34 @@ static ArnTarget S3TablesTarget(const ParsedArn &arn) {
 	return target;
 }
 
+static string RdsInstanceId(const ParsedArn &arn) {
+	static const string prefix = "db:";
+	if (!StringUtil::StartsWith(arn.resource, prefix) || arn.resource.size() == prefix.size()) {
+		throw InvalidInputException("Expected an RDS DB instance ARN with a resource of the form 'db:<instance-id>', "
+		                            "got '%s'",
+		                            arn.raw);
+	}
+	return arn.resource.substr(prefix.size());
+}
+
+//! RDS owns DB-instance discovery and delegates to the backend for the instance's engine.
+static ArnTarget RDSTarget(const ParsedArn &arn) {
+	if (arn.region.empty()) {
+		throw InvalidInputException("RDS DB instance ARN '%s' does not specify a region", arn.raw);
+	}
+
+	ArnTarget target;
+	target.backend = "rds";
+	target.path = RdsInstanceId(arn);
+	target.options["region"] = Value(arn.region);
+	target.autoload = false;
+	return target;
+}
+
 static const case_insensitive_map_t<arn_handler_t> &ArnServiceHandlers() {
 	static const case_insensitive_map_t<arn_handler_t> handlers {
 	    {"s3tables", S3TablesTarget},
+	    {"rds", RDSTarget},
 	};
 	return handlers;
 }
@@ -99,6 +124,7 @@ static ArnTarget ResolveArnTarget(const ParsedArn &arn) {
 		for (auto &it : handlers) {
 			services.push_back(it.first);
 		}
+		std::sort(services.begin(), services.end());
 		auto supported_options = StringUtil::Join(services, ", ");
 		throw NotImplementedException("ATTACH of AWS ARN service '%s' is not supported. Supported options are: %s",
 		                              arn.service, supported_options);
@@ -128,7 +154,7 @@ static optional_ptr<StorageExtension> GetBackend(AttachedDatabase &db, const Arn
 
 //! The ARN determines these options, so setting them in ATTACH is always an error, even to the same value.
 //! Keys in info.options preserve the case the user typed, hence the case-insensitive scan.
-static void ApplyTargetOptions(AttachInfo &info, const ArnTarget &target) {
+static void ApplyTargetOptions(AttachInfo &info, AttachOptions &options, const ArnTarget &target) {
 	for (auto &option : target.options) {
 		for (auto &existing : info.options) {
 			if (StringUtil::CIEquals(existing.first, option.first)) {
@@ -137,6 +163,7 @@ static void ApplyTargetOptions(AttachInfo &info, const ArnTarget &target) {
 			}
 		}
 		info.options[option.first] = option.second;
+		options.options[option.first] = option.second;
 	}
 }
 
@@ -147,7 +174,7 @@ static unique_ptr<Catalog> ArnAttach(optional_ptr<StorageExtensionInfo> storage_
 	auto target = ResolveArnTarget(arn);
 
 	info.path = target.path;
-	ApplyTargetOptions(info, target);
+	ApplyTargetOptions(info, options, target);
 
 	auto backend = GetBackend(db, target, arn.raw);
 	if (!backend->attach) {
