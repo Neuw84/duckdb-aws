@@ -234,8 +234,6 @@ public:
 void ArnStorage::RegisterStorageExtension(ExtensionLoader &loader) {
 	auto arn_storage = make_shared_ptr<ArnStorageExtension>();
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	// 'aws' is the type name: `ATTACH '<arn>' (TYPE aws)`.
-	StorageExtension::Register(config, "aws", arn_storage);
 	// Core derives the db type from the 'arn:' path prefix, so a bare
 	// `ATTACH '<arn>'` looks for a storage type named 'arn'. Registering it here
 	// serves that form without a core arn->aws extension alias.
